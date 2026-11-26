@@ -1,6 +1,6 @@
 /* 삼자대화 — 오프라인 지원 서비스 워커
    같은 출처의 앱 파일만 캐시합니다. OpenAI / Anthropic API 호출은 손대지 않습니다. */
-var CACHE = "trialogue-v1";
+var CACHE = "trialogue-v2";
 var ASSETS = [
   "./",
   "./index.html",
