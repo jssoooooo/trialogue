@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>삼자대화 — 나 + 클로드 + GPT</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="삼자대화">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#17161a" media="(prefers-color-scheme: dark)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f6f5f3; --surface:#ffffff; --surface-2:#edebe7; --line:#ddd9d2;
+    --text:#1f1d1b; --dim:#6f6a63; --faint:#9b958c;
+    --me:#2f6fd0; --me-bg:#2f6fd0; --me-fg:#ffffff;
+    --claude:#c2410c; --claude-bg:#fdf1e9; --claude-line:#f0d4c0;
+    --gpt:#0f766e; --gpt-bg:#e9f5f3; --gpt-line:#c3e2dd;
+    --warn:#b45309; --err:#b42318;
+    --radius:16px;
+    --safe-b:env(safe-area-inset-bottom,0px);
+    --safe-t:env(safe-area-inset-top,0px);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#17161a; --surface:#201f24; --surface-2:#2a282f; --line:#383540;
+      --text:#eceaf0; --dim:#a39eac; --faint:#746f7d;
+      --me:#6b9dff; --me-bg:#2d4a86; --me-fg:#f2f6ff;
+      --claude:#f08a5a; --claude-bg:#2e211c; --claude-line:#4a3228;
+      --gpt:#49c2b1; --gpt-bg:#17282a; --gpt-line:#27413f;
+      --warn:#e0a94f; --err:#f08a80;
+    }
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:"Noto Sans KR",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    font-size:15px; line-height:1.6; overscroll-behavior-y:none;
+  }
+  button,input,textarea,select{font-family:inherit;font-size:inherit;color:inherit}
+  button{cursor:pointer;border:none;background:none}
+
+  .app{display:flex;flex-direction:column;height:100dvh;max-width:820px;margin:0 auto;background:var(--bg)}
+
+  /* ---------- header ---------- */
+  header{
+    padding:calc(var(--safe-t) + 10px) 14px 10px; background:var(--surface);
+    border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5;
+  }
+  .hrow{display:flex;align-items:center;gap:10px}
+  .title{font-weight:700;font-size:16px;letter-spacing:-.01em;flex:1;min-width:0}
+  .title small{display:block;font-weight:400;font-size:11.5px;color:var(--faint);letter-spacing:0}
+  .iconbtn{
+    width:38px;height:38px;border-radius:11px;display:grid;place-items:center;
+    background:var(--surface-2);color:var(--dim);font-size:17px;flex:none;
+  }
+  .iconbtn:active{transform:scale(.94)}
+  .chips{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
+  .chip{
+    display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:999px;
+    font-size:11.5px;font-weight:500;background:var(--surface-2);color:var(--dim);
+    border:1px solid transparent;
+  }
+  .chip b{font-weight:700}
+  .chip.on{background:var(--gpt-bg);color:var(--gpt);border-color:var(--gpt-line)}
+  .chip.cl{background:var(--claude-bg);color:var(--claude);border-color:var(--claude-line)}
+  .dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+
+  /* ---------- messages ---------- */
+  .scroll{flex:1;overflow-y:auto;padding:14px 12px 4px;-webkit-overflow-scrolling:touch}
+  .msg{display:flex;gap:9px;margin-bottom:14px;align-items:flex-start}
+  .msg.me{flex-direction:row-reverse}
+  .av{
+    width:30px;height:30px;border-radius:10px;flex:none;display:grid;place-items:center;
+    font-size:12.5px;font-weight:700;color:#fff;margin-top:2px;
+  }
+  .av.c{background:var(--claude)} .av.g{background:var(--gpt)} .av.m{background:var(--me)}
+  .bub{max-width:min(78%,560px);min-width:0}
+  .who{font-size:11.5px;font-weight:700;color:var(--dim);margin:0 2px 3px}
+  .msg.me .who{text-align:right}
+  .body{
+    padding:10px 13px;border-radius:var(--radius);white-space:pre-wrap;word-break:break-word;
+    background:var(--surface);border:1px solid var(--line);
+  }
+  .msg.me .body{background:var(--me-bg);color:var(--me-fg);border-color:transparent;border-bottom-right-radius:5px}
+  .msg.claude .body{background:var(--claude-bg);border-color:var(--claude-line);border-bottom-left-radius:5px}
+  .msg.gpt .body{background:var(--gpt-bg);border-color:var(--gpt-line);border-bottom-left-radius:5px}
+  .msg.sys{justify-content:center}
+  .msg.sys .body{
+    background:transparent;border:1px dashed var(--line);color:var(--dim);
+    font-size:12.5px;text-align:center;padding:7px 12px;
+  }
+  .body.err{color:var(--err);font-size:13.5px}
+  .typing{display:inline-flex;gap:3px;align-items:center;height:1.4em}
+  .typing i{width:5px;height:5px;border-radius:50%;background:var(--faint);animation:bl 1.2s infinite}
+  .typing i:nth-child(2){animation-delay:.2s} .typing i:nth-child(3){animation-delay:.4s}
+  @keyframes bl{0%,60%,100%{opacity:.25}30%{opacity:1}}
+
+  .empty{text-align:center;color:var(--faint);padding:34px 18px}
+  .empty h2{font-size:16px;color:var(--dim);margin:0 0 8px}
+  .empty p{font-size:13px;margin:0 auto;max-width:400px}
+  .seeds{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;margin-top:16px}
+  .seed{
+    padding:7px 12px;border-radius:999px;background:var(--surface);border:1px solid var(--line);
+    font-size:12.5px;color:var(--dim);
+  }
+
+  /* ---------- bridge (copy–paste) ---------- */
+  .bridge{
+    margin:0 2px 14px;border:1px solid var(--line);border-radius:14px;background:var(--surface);
+    overflow:hidden;
+  }
+  .bridge header{position:static;padding:11px 13px;background:var(--surface-2);border:none;border-bottom:1px solid var(--line)}
+  .bridge .bh{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:700}
+  .bridge .bh span.n{margin-left:auto;font-size:11px;font-weight:500;color:var(--faint)}
+  .bridge .bd{padding:11px 13px}
+  .steps{counter-reset:s;margin:0;padding:0;list-style:none}
+  .steps li{counter-increment:s;position:relative;padding-left:24px;margin-bottom:9px;font-size:13px;color:var(--dim)}
+  .steps li::before{
+    content:counter(s);position:absolute;left:0;top:1px;width:17px;height:17px;border-radius:50%;
+    background:var(--surface-2);color:var(--dim);font-size:10.5px;font-weight:700;display:grid;place-items:center;
+  }
+  .row{display:flex;gap:7px;flex-wrap:wrap}
+  .btn{
+    padding:10px 14px;border-radius:11px;background:var(--surface-2);color:var(--text);
+    font-size:13.5px;font-weight:600;border:1px solid var(--line);
+  }
+  .btn:active{transform:scale(.97)}
+  .btn.p{background:var(--me-bg);color:var(--me-fg);border-color:transparent}
+  .btn.g{background:var(--gpt);color:#fff;border-color:transparent}
+  .btn.sm{padding:7px 11px;font-size:12.5px;border-radius:9px}
+  .btn[disabled]{opacity:.45;pointer-events:none}
+  .btn.link{background:none;border:none;color:var(--me);text-decoration:underline;padding:8px 2px}
+  a.btn{text-decoration:none;display:inline-block}
+  textarea.paste{
+    width:100%;margin-top:9px;min-height:84px;padding:10px 12px;border-radius:11px;
+    background:var(--bg);border:1px solid var(--line);resize:vertical;line-height:1.55;
+  }
+  textarea.paste:focus{outline:2px solid var(--gpt);outline-offset:-1px}
+  .prev{
+    margin-top:8px;max-height:112px;overflow:auto;padding:9px 11px;border-radius:10px;
+    background:var(--bg);border:1px solid var(--line);font-size:11.5px;color:var(--faint);
+    white-space:pre-wrap;word-break:break-word;
+  }
+
+  /* ---------- composer ---------- */
+  .composer{
+    background:var(--surface);border-top:1px solid var(--line);
+    padding:9px 11px calc(9px + var(--safe-b));
+  }
+  .modes{display:flex;gap:5px;margin-bottom:8px;align-items:center}
+  .seg{display:flex;background:var(--surface-2);border-radius:10px;padding:2px;gap:2px}
+  .seg button{padding:5px 10px;border-radius:8px;font-size:12px;font-weight:600;color:var(--dim)}
+  .seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .modes .sp{flex:1}
+  .cbox{display:flex;gap:8px;align-items:flex-end}
+  .cbox textarea{
+    flex:1;min-height:44px;max-height:130px;padding:11px 13px;border-radius:14px;
+    background:var(--bg);border:1px solid var(--line);resize:none;line-height:1.5;
+  }
+  .cbox textarea:focus{outline:2px solid var(--me);outline-offset:-1px}
+  .send{
+    width:44px;height:44px;border-radius:14px;background:var(--me-bg);color:var(--me-fg);
+    display:grid;place-items:center;font-size:18px;flex:none;
+  }
+  .send[disabled]{opacity:.4;pointer-events:none}
+
+  /* ---------- sheet ---------- */
+  .veil{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:20;display:none}
+  .veil.open{display:block}
+  .sheet{
+    position:fixed;left:0;right:0;bottom:0;z-index:21;max-height:92dvh;overflow-y:auto;
+    background:var(--surface);border-radius:20px 20px 0 0;border-top:1px solid var(--line);
+    padding:0 16px calc(20px + var(--safe-b));transform:translateY(102%);
+    transition:transform .24s cubic-bezier(.3,.9,.3,1);max-width:820px;margin:0 auto;
+  }
+  .sheet.open{transform:translateY(0)}
+  .grab{padding:12px 0 6px;position:sticky;top:0;background:var(--surface);z-index:1}
+  .grab i{display:block;width:38px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 10px}
+  .grab .t{display:flex;align-items:center;gap:10px}
+  .grab .t b{font-size:15px;flex:1}
+  fieldset{border:none;margin:0;padding:14px 0 4px;border-top:1px solid var(--line)}
+  fieldset:first-of-type{border-top:none}
+  legend{font-size:12px;font-weight:700;color:var(--faint);letter-spacing:.04em;text-transform:uppercase;padding:0}
+  label{display:block;font-size:12.5px;font-weight:600;color:var(--dim);margin:11px 0 5px}
+  input[type=text],input[type=password],textarea.ta,select{
+    width:100%;padding:10px 12px;border-radius:11px;background:var(--bg);
+    border:1px solid var(--line);
+  }
+  textarea.ta{min-height:62px;resize:vertical;line-height:1.55}
+  input:focus,textarea:focus,select:focus{outline:2px solid var(--me);outline-offset:-1px}
+  .hint{font-size:11.5px;color:var(--faint);margin:5px 0 0;line-height:1.5}
+  .hint.w{color:var(--warn)}
+  .pick{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+  .pick button{padding:5px 9px;border-radius:8px;background:var(--surface-2);font-size:11.5px;color:var(--dim);font-weight:600}
+  .note{
+    background:var(--surface-2);border-radius:12px;padding:11px 13px;font-size:12.5px;
+    color:var(--dim);line-height:1.6;margin:12px 0 0;
+  }
+  .note b{color:var(--text)}
+  .sheet .row{margin-top:14px}
+  .inline{display:flex;gap:8px;align-items:center}
+  .inline input{flex:1}
+  .nums{display:flex;gap:8px}
+  .nums>div{flex:1}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="hrow">
+      <div class="title">삼자대화<small id="sub">나 · 클로드 · GPT 한 방에서</small></div>
+      <button class="iconbtn" id="btnHelp" aria-label="사용법">?</button>
+      <button class="iconbtn" id="btnSet" aria-label="설정">⚙</button>
+    </div>
+    <div class="chips">
+      <span class="chip cl" id="chipC"><i class="dot"></i>클로드 <b>확인 중</b></span>
+      <span class="chip" id="chipG"><i class="dot"></i>GPT <b>복붙</b></span>
+      <button class="chip" id="btnClear">대화 비우기</button>
+    </div>
+  </header>
+
+  <div class="scroll" id="scroll">
+    <div class="empty" id="empty">
+      <h2>세 명이 같이 이야기하는 방</h2>
+      <p>내가 질문하면 클로드와 GPT가 각자 답합니다. 둘이 서로 토론하게 둘 수도 있어요.</p>
+      <div class="seeds" id="seeds"></div>
+    </div>
+  </div>
+
+  <div class="composer">
+    <div class="modes">
+      <div class="seg" id="segMode" role="group" aria-label="답변자">
+        <button data-m="both" aria-pressed="true">둘 다</button>
+        <button data-m="claude" aria-pressed="false">클로드만</button>
+        <button data-m="gpt" aria-pressed="false">GPT만</button>
+      </div>
+      <span class="sp"></span>
+      <button class="btn sm" id="btnDebate">자동 토론</button>
+    </div>
+    <div class="cbox">
+      <textarea id="input" rows="1" placeholder="메시지를 입력하세요…"></textarea>
+      <button class="send" id="btnSend" aria-label="보내기">↑</button>
+    </div>
+  </div>
+</div>
+
+<div class="veil" id="veil"></div>
+
+<!-- 설정 -->
+<div class="sheet" id="sheetSet" role="dialog" aria-label="설정">
+  <div class="grab"><i></i><div class="t"><b>설정</b><button class="btn sm" data-close>닫기</button></div></div>
+
+  <fieldset>
+    <legend>GPT 연결</legend>
+    <label for="oKey">OpenAI API 키</label>
+    <input type="password" id="oKey" placeholder="sk-…" autocomplete="off" spellcheck="false">
+    <p class="hint">키는 이 브라우저에만 저장되고 어디로도 전송되지 않습니다(OpenAI 서버 제외). 비워두면 복붙 모드로 동작합니다.</p>
+    <label for="oModel">모델</label>
+    <div class="inline">
+      <input type="text" id="oModel" list="oModels" placeholder="gpt-5.1" spellcheck="false">
+      <button class="btn sm" id="btnModels">목록</button>
+    </div>
+    <datalist id="oModels"></datalist>
+    <div class="pick" id="oPick"></div>
+    <p class="hint" id="oMsg"></p>
+  </fieldset>
+
+  <fieldset>
+    <legend>클로드 연결</legend>
+    <p class="hint" id="cState">확인 중…</p>
+    <div id="anthWrap" style="display:none">
+      <label for="aKey">Anthropic API 키</label>
+      <input type="password" id="aKey" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
+      <label for="aModel">모델</label>
+      <input type="text" id="aModel" placeholder="claude-sonnet-5-5" spellcheck="false">
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>성격 설정</legend>
+    <label for="pC">클로드에게</label>
+    <textarea class="ta" id="pC" placeholder="예: 반말로, 짧게, 비판적으로 답해줘"></textarea>
+    <label for="pG">GPT에게</label>
+    <textarea class="ta" id="pG" placeholder="예: 다른 참가자 의견에 반대편을 들어줘"></textarea>
+  </fieldset>
+
+  <div class="row"><button class="btn p" id="btnSave" style="flex:1">저장</button></div>
+  <p class="hint">저장한 키를 지우려면 입력칸을 비우고 저장하세요.</p>
+</div>
+
+<!-- 자동 토론 -->
+<div class="sheet" id="sheetDeb" role="dialog" aria-label="자동 토론">
+  <div class="grab"><i></i><div class="t"><b>자동 토론</b><button class="btn sm" data-close>닫기</button></div></div>
+  <fieldset>
+    <legend>설정</legend>
+    <label for="dTopic">주제</label>
+    <textarea class="ta" id="dTopic" placeholder="예: AI가 예술가를 대체할 수 있는가"></textarea>
+    <div class="nums">
+      <div>
+        <label for="dRounds">주고받을 횟수</label>
+        <select id="dRounds">
+          <option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option>
+        </select>
+      </div>
+      <div>
+        <label for="dFirst">먼저 말할 쪽</label>
+        <select id="dFirst"><option value="claude" selected>클로드</option><option value="gpt">GPT</option></select>
+      </div>
+    </div>
+    <p class="hint" id="dMsg"></p>
+  </fieldset>
+  <div class="row"><button class="btn p" id="btnDebGo" style="flex:1">시작</button></div>
+</div>
+
+<!-- 사용법 -->
+<div class="sheet" id="sheetHelp" role="dialog" aria-label="사용법">
+  <div class="grab"><i></i><div class="t"><b>사용법</b><button class="btn sm" data-close>닫기</button></div></div>
+  <div class="note">
+    <b>복붙 모드 (키 없이, 폰에서 바로)</b><br>
+    GPT 차례가 되면 카드가 뜹니다. ① 복사 → ② ChatGPT 앱에 붙여넣기 → ③ GPT 답변을 다시 이 칸에 붙여넣으면 대화에 끼워 넣어집니다. 지금까지의 대화 전체가 함께 복사되니 GPT도 맥락을 알고 답합니다.
+  </div>
+  <div class="note">
+    <b>API 모드 (GPT가 자동 답변)</b><br>
+    설정에 OpenAI API 키를 넣으면 GPT가 바로 답합니다. 단, 클로드 앱 안에서 열린 페이지는 보안 정책상 외부 서버 요청이 막혀 있어서 이 모드가 동작하지 않습니다. 이 파일을 폰에 저장해 크롬에서 열면(또는 PC 브라우저) 자동 답변이 됩니다.
+  </div>
+  <div class="note">
+    <b>클로드</b><br>
+    클로드 앱 안에서 열었을 때는 키 없이 바로 답합니다. 파일로 열었을 때는 Anthropic API 키를 넣거나, 답변자를 "GPT만"으로 두고 클로드 쪽은 이 채팅창에서 직접 이야기하면 됩니다.
+  </div>
+  <div class="row"><button class="btn p" data-close style="flex:1">알겠어요</button></div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+var LABEL = {me:"나", claude:"클로드", gpt:"GPT"};
+var SEEDS = [
+  "둘이 서로 자기소개 해봐",
+  "같은 질문에 다르게 답할 것 같은 주제 하나 던져줘",
+  "내 고민 하나 들어줄래?",
+  "서로의 답변을 평가해봐"
+];
+
+var S = {
+  msgs: [],
+  mode: "both",
+  oKey: "", oModel: "gpt-5.1",
+  aKey: "", aModel: "claude-sonnet-5-5",
+  pC: "", pG: "",
+  sample: null,
+  busy: false,
+  stop: false,
+  bridge: null
+};
+
+var el = {};
+["scroll","empty","seeds","input","btnSend","btnSet","btnHelp","btnClear","btnDebate","segMode",
+ "veil","sheetSet","sheetDeb","sheetHelp","chipC","chipG","sub","oKey","oModel","oModels","oPick",
+ "oMsg","cState","anthWrap","aKey","aModel","pC","pG","btnSave","btnModels","dTopic","dRounds",
+ "dFirst","dMsg","btnDebGo"].forEach(function(id){ el[id] = document.getElementById(id); });
+
+/* ---------------- storage ---------------- */
+var KEY = "trialogue.v1";
+function load(){
+  try{
+    var raw = localStorage.getItem(KEY); if(!raw) return;
+    var d = JSON.parse(raw);
+    ["oKey","oModel","aKey","aModel","pC","pG","mode"].forEach(function(k){
+      if(typeof d[k] === "string" && d[k]) S[k] = d[k];
+    });
+    if(Array.isArray(d.msgs)) S.msgs = d.msgs.filter(function(m){
+      return m && typeof m.text === "string" && LABEL[m.who] !== undefined;
+    }).slice(-200);
+  }catch(e){}
+}
+function save(){
+  try{
+    localStorage.setItem(KEY, JSON.stringify({
+      oKey:S.oKey, oModel:S.oModel, aKey:S.aKey, aModel:S.aModel,
+      pC:S.pC, pG:S.pG, mode:S.mode,
+      msgs:S.msgs.filter(function(m){return !m.pending;}).map(function(m){
+        return {who:m.who, text:m.text, sys:!!m.sys};
+      }).slice(-200)
+    }));
+  }catch(e){}
+}
+
+/* ---------------- capability ---------------- */
+function claudeAuto(){ return !!S.sample || !!S.aKey; }
+function gptAuto(){ return !!S.oKey; }
+
+(function detect(){
+  var c = (typeof window !== "undefined") ? window.claude : null;
+  if(!c || typeof c.use !== "function"){ S.sample = null; paintChips(); return; }
+  try{
+    Promise.resolve(c.use("sample")).then(function(s){
+      S.sample = (typeof s === "function") ? s : null;
+      paintChips();
+    }, function(){ S.sample = null; paintChips(); });
+  }catch(e){ S.sample = null; paintChips(); }
+})();
+
+/* ---------------- render ---------------- */
+function paintChips(){
+  var cOn = claudeAuto();
+  el.chipC.className = "chip" + (cOn ? " cl" : "");
+  el.chipC.innerHTML = "";
+  el.chipC.appendChild(mk("i","dot"));
+  el.chipC.appendChild(document.createTextNode("클로드 "));
+  el.chipC.appendChild(mk("b", null, cOn ? (S.sample ? "자동" : "API") : "복붙"));
+
+  var gOn = gptAuto();
+  el.chipG.className = "chip" + (gOn ? " on" : "");
+  el.chipG.innerHTML = "";
+  el.chipG.appendChild(mk("i","dot"));
+  el.chipG.appendChild(document.createTextNode("GPT "));
+  el.chipG.appendChild(mk("b", null, gOn ? "자동" : "복붙"));
+
+  el.cState.textContent = S.sample
+    ? "클로드 앱 안에서 열렸습니다 — 키 없이 바로 답합니다."
+    : "앱 내장 연결이 없습니다. 아래에 Anthropic API 키를 넣으면 클로드도 자동으로 답합니다.";
+  el.anthWrap.style.display = S.sample ? "none" : "block";
+  el.sub.textContent = (cOn && gOn) ? "둘 다 자동 답변" : (gOn ? "GPT 자동 · 클로드 복붙" : (cOn ? "클로드 자동 · GPT 복붙" : "복붙 모드"));
+  el.dMsg.textContent = (claudeAuto() && gptAuto()) ? "" : "자동 토론은 양쪽 모두 자동 답변일 때만 쓸 수 있어요. 설정에서 키를 넣어주세요.";
+}
+
+function mk(tag, cls, text){
+  var n = document.createElement(tag);
+  if(cls) n.className = cls;
+  if(text !== undefined && text !== null) n.textContent = text;
+  return n;
+}
+
+function renderAll(){
+  el.scroll.innerHTML = "";
+  if(!S.msgs.length){ el.scroll.appendChild(el.empty); }
+  S.msgs.forEach(function(m){ el.scroll.appendChild(buildMsg(m)); });
+  if(S.bridge) el.scroll.appendChild(buildBridge(S.bridge));
+  toBottom();
+}
+
+function buildMsg(m){
+  var wrap = mk("div","msg " + (m.sys ? "sys" : m.who));
+  if(!m.sys){
+    var av = mk("div","av " + (m.who === "claude" ? "c" : m.who === "gpt" ? "g" : "m"),
+                m.who === "claude" ? "C" : m.who === "gpt" ? "G" : "나");
+    wrap.appendChild(av);
+  }
+  var bub = mk("div","bub");
+  if(!m.sys && m.who !== "me") bub.appendChild(mk("div","who", LABEL[m.who]));
+  var body = mk("div","body" + (m.err ? " err" : ""));
+  if(m.pending && !m.text){
+    var t = mk("span","typing");
+    t.appendChild(mk("i")); t.appendChild(mk("i")); t.appendChild(mk("i"));
+    body.appendChild(t);
+  } else {
+    body.textContent = m.text;
+  }
+  bub.appendChild(body);
+  wrap.appendChild(bub);
+  m._body = body;
+  return wrap;
+}
+
+function addMsg(who, text, opts){
+  opts = opts || {};
+  var m = {who:who, text:text || "", sys:!!opts.sys, err:!!opts.err, pending:!!opts.pending};
+  S.msgs.push(m);
+  if(S.msgs.length === 1) el.scroll.innerHTML = "";
+  var node = buildMsg(m);
+  if(S.bridge){
+    var b = el.scroll.querySelector(".bridge");
+    if(b) el.scroll.insertBefore(node, b); else el.scroll.appendChild(node);
+  } else {
+    el.scroll.appendChild(node);
+  }
+  toBottom(); save();
+  return m;
+}
+function setText(m, text){
+  m.text = text;
+  if(m._body){ m._body.textContent = text; }
+  toBottom();
+}
+function settle(m, text, isErr){
+  m.pending = false; m.err = !!isErr;
+  if(m._body) m._body.className = "body" + (isErr ? " err" : "");
+  setText(m, text);
+  save();
+}
+
+var stick = true;
+el.scroll.addEventListener("scroll", function(){
+  stick = el.scroll.scrollHeight - el.scroll.scrollTop - el.scroll.clientHeight < 90;
+});
+function toBottom(){ if(stick) el.scroll.scrollTop = el.scroll.scrollHeight; }
+
+/* ---------------- prompt building ---------------- */
+function transcript(upto){
+  var list = S.msgs.filter(function(m){ return !m.err && !m.pending && m.text; });
+  if(typeof upto === "number") list = list.slice(0, upto);
+  return list.map(function(m){
+    return (m.sys ? "[안내]" : LABEL[m.who]) + ": " + m.text;
+  }).join("\n");
+}
+function rules(who){
+  var other = who === "claude" ? "GPT" : "클로드";
+  var persona = who === "claude" ? S.pC : S.pG;
+  var name = who === "claude" ? "클로드" : "GPT";
+  return "이것은 세 참가자(나, 클로드, GPT)가 함께 나누는 대화입니다. 당신은 " + name + "입니다.\n" +
+    "- 당신 차례에 할 말만 쓰세요. 이름 접두사(\"" + name + ":\")는 쓰지 마세요.\n" +
+    "- " + other + "의 발언에 동의하거나 반박해도 좋지만, " + other + "를 대신해 말하지 마세요.\n" +
+    "- 대화체로, 너무 길지 않게 답하세요." +
+    (persona ? "\n- 추가 요청: " + persona : "");
+}
+function claudePrompt(){
+  return rules("claude") + "\n\n--- 지금까지의 대화 ---\n" + transcript() +
+         "\n\n--- 이제 클로드 차례입니다 ---";
+}
+function gptMessages(){
+  var msgs = [{role:"system", content:rules("gpt")}];
+  S.msgs.forEach(function(m){
+    if(m.err || m.pending || !m.text) return;
+    if(m.who === "gpt" && !m.sys) msgs.push({role:"assistant", content:m.text});
+    else msgs.push({role:"user", content:(m.sys ? "[안내]" : LABEL[m.who]) + ": " + m.text});
+  });
+  if(msgs[msgs.length-1].role !== "user") msgs.push({role:"user", content:"[안내]: GPT 차례입니다."});
+  return msgs;
+}
+function bridgeText(who){
+  var name = who === "claude" ? "클로드" : "GPT";
+  return rules(who) + "\n\n--- 지금까지의 대화 ---\n" + transcript() +
+         "\n\n--- 이제 " + name + " 차례입니다. 답변만 적어주세요 ---";
+}
+
+/* ---------------- model calls ---------------- */
+function apiErr(status, body){
+  var detail = "";
+  try{ var j = JSON.parse(body); detail = (j.error && (j.error.message || j.error.type)) || ""; }catch(e){ detail = (body||"").slice(0,160); }
+  var head = status === 401 ? "API 키가 올바르지 않습니다."
+           : status === 403 ? "이 키로는 접근이 거부되었습니다."
+           : status === 404 ? "모델 이름을 찾을 수 없습니다. 설정에서 모델을 확인하세요."
+           : status === 429 ? "요청이 많거나 사용 한도에 걸렸습니다. 잠시 후 다시 시도하세요."
+           : (status >= 500 ? "서버 오류입니다. 잠시 후 다시 시도하세요." : "요청이 거부되었습니다 (" + status + ").");
+  return head + (detail ? "\n" + detail : "");
+}
+function netErr(e){
+  return "연결하지 못했습니다.\n클로드 앱 안에서 열린 페이지는 보안 정책상 외부 API를 호출할 수 없습니다. 이 파일을 폰이나 PC의 브라우저에서 직접 열면 동작합니다. (복붙 모드로는 지금도 쓸 수 있어요.)\n" + (e && e.message ? e.message : "");
+}
+
+async function callOpenAI(onDelta, useStream){
+  var res;
+  try{
+    res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":"Bearer " + S.oKey},
+      body: JSON.stringify(useStream
+        ? {model:S.oModel, messages:gptMessages(), stream:true}
+        : {model:S.oModel, messages:gptMessages()})
+    });
+  }catch(e){ throw new Error(netErr(e)); }
+  if(!res.ok){
+    var body = "";
+    try{ body = await res.text(); }catch(e){}
+    if(useStream && /stream/i.test(body)) return callOpenAI(onDelta, false);
+    throw new Error(apiErr(res.status, body));
+  }
+  if(!useStream){
+    var j = await res.json();
+    return (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "";
+  }
+  var reader = res.body.getReader(), dec = new TextDecoder(), buf = "", out = "";
+  while(true){
+    var r = await reader.read();
+    if(r.done) break;
+    buf += dec.decode(r.value, {stream:true});
+    var lines = buf.split("\n"); buf = lines.pop();
+    for(var i=0;i<lines.length;i++){
+      var line = lines[i].trim();
+      if(line.indexOf("data:") !== 0) continue;
+      var data = line.slice(5).trim();
+      if(data === "[DONE]") continue;
+      try{
+        var p = JSON.parse(data);
+        var d = p.choices && p.choices[0] && p.choices[0].delta && p.choices[0].delta.content;
+        if(d){ out += d; onDelta(out); }
+      }catch(e){}
+    }
+  }
+  return out;
+}
+
+async function callAnthropic(){
+  var res;
+  try{
+    res = await fetch("https://api.anthropic.com/v1/messages", {
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "x-api-key": S.aKey,
+        "anthropic-version":"2023-06-01",
+        "anthropic-dangerous-direct-browser-access":"true"
+      },
+      body: JSON.stringify({model:S.aModel, max_tokens:1200, messages:[{role:"user", content:claudePrompt()}]})
+    });
+  }catch(e){ throw new Error(netErr(e)); }
+  if(!res.ok){
+    var body = "";
+    try{ body = await res.text(); }catch(e){}
+    throw new Error(apiErr(res.status, body));
+  }
+  var j = await res.json();
+  return (j.content || []).filter(function(b){ return b.type === "text"; })
+                          .map(function(b){ return b.text; }).join("").trim();
+}
+
+async function turnClaude(){
+  var m = addMsg("claude", "", {pending:true});
+  try{
+    var out = "";
+    if(S.sample){
+      var r = await S.sample(claudePrompt(), {
+        cache:false,
+        onText:function(ev){
+          if(ev && typeof ev.text === "string"){ m.pending = false; setText(m, ev.text); }
+        }
+      });
+      out = (r && r.text) || m.text || "";
+    } else {
+      out = await callAnthropic();
+    }
+    out = clean(out, "클로드");
+    if(!out) throw new Error("빈 응답을 받았습니다.");
+    settle(m, out, false);
+    return true;
+  }catch(e){
+    settle(m, "클로드 응답 실패 — " + msgOf(e), true);
+    return false;
+  }
+}
+
+async function turnGPT(){
+  var m = addMsg("gpt", "", {pending:true});
+  try{
+    var out = await callOpenAI(function(t){ m.pending = false; setText(m, t); }, true);
+    out = clean(out, "GPT");
+    if(!out) throw new Error("빈 응답을 받았습니다.");
+    settle(m, out, false);
+    return true;
+  }catch(e){
+    settle(m, "GPT 응답 실패 — " + msgOf(e), true);
+    return false;
+  }
+}
+
+function msgOf(e){
+  if(!e) return "알 수 없는 오류";
+  if(e.code === "not_granted") return "이 페이지가 클로드에게 물어볼 권한을 받지 못했습니다.";
+  if(e.code === "rate_limited") return "요청이 너무 잦습니다. 잠시 후 다시 시도하세요.";
+  return e.message || String(e);
+}
+function clean(t, name){
+  t = (t || "").trim();
+  var re = new RegExp("^" + name + "\\s*[:：]\\s*");
+  return t.replace(re, "").trim();
+}
+
+/* ---------------- bridge ---------------- */
+function buildBridge(b){
+  var box = mk("div","bridge");
+  var head = document.createElement("header");
+  var bh = mk("div","bh");
+  bh.appendChild(mk("span", null, (b.who === "gpt" ? "GPT" : "클로드") + " 차례 — 복붙으로 가져오기"));
+  bh.appendChild(mk("span","n", b.text.length.toLocaleString() + "자"));
+  head.appendChild(bh); box.appendChild(head);
+
+  var bd = mk("div","bd");
+  var steps = mk("ol","steps");
+  steps.appendChild(mk("li", null, "아래 ‘대화 복사’를 누르세요 (지금까지의 대화 전체가 복사됩니다)."));
+  var li2 = mk("li", null, b.who === "gpt" ? "ChatGPT 앱이나 사이트에 붙여넣고 보내세요." : "클로드 앱에 붙여넣고 보내세요.");
+  steps.appendChild(li2);
+  steps.appendChild(mk("li", null, "받은 답변을 복사해서 아래 칸에 붙여넣고 ‘대화에 추가’를 누르세요."));
+  bd.appendChild(steps);
+
+  var row = mk("div","row");
+  var copy = mk("button","btn " + (b.who === "gpt" ? "g" : "p"), "대화 복사");
+  copy.addEventListener("click", function(){
+    doCopy(b.text, copy);
+  });
+  row.appendChild(copy);
+  var open = document.createElement("a");
+  open.className = "btn"; open.textContent = b.who === "gpt" ? "ChatGPT 열기" : "클로드 열기";
+  open.href = b.who === "gpt" ? "https://chatgpt.com/" : "https://claude.ai/";
+  open.target = "_blank"; open.rel = "noopener";
+  row.appendChild(open);
+  var skip = mk("button","btn","건너뛰기");
+  skip.addEventListener("click", function(){ S.bridge = null; renderAll(); });
+  row.appendChild(skip);
+  bd.appendChild(row);
+
+  var ta = mk("textarea","paste");
+  ta.placeholder = (b.who === "gpt" ? "GPT" : "클로드") + " 답변을 여기에 붙여넣으세요…";
+  bd.appendChild(ta);
+
+  var row2 = mk("div","row");
+  var add = mk("button","btn p","대화에 추가");
+  add.addEventListener("click", function(){
+    var v = ta.value.trim();
+    if(!v){ ta.focus(); return; }
+    S.bridge = null;
+    addMsg(b.who, clean(v, b.who === "gpt" ? "GPT" : "클로드"));
+    renderAll();
+    if(b.next) afterBridge(b.next);
+  });
+  row2.appendChild(add);
+  bd.appendChild(row2);
+
+  var prev = mk("div","prev", b.text);
+  bd.appendChild(prev);
+
+  box.appendChild(bd);
+  return box;
+}
+
+function doCopy(text, btn){
+  var done = function(){
+    var old = btn.textContent;
+    btn.textContent = "복사됨 ✓";
+    setTimeout(function(){ btn.textContent = old; }, 1600);
+  };
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done, function(){ legacy(text, done); });
+      return;
+    }
+  }catch(e){}
+  legacy(text, done);
+}
+function legacy(text, done){
+  var ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed"; ta.style.top = "-1000px";
+  document.body.appendChild(ta);
+  ta.select();
+  var ok = false;
+  try{ ok = document.execCommand("copy"); }catch(e){}
+  document.body.removeChild(ta);
+  if(ok) done();
+  else alertish("복사가 막혔습니다. 아래 미리보기 영역의 글을 길게 눌러 직접 복사해주세요.");
+}
+function alertish(text){ addMsg("me", text, {sys:true}); }
+
+function openBridge(who, next){
+  S.bridge = {who:who, text:bridgeText(who), next:next || null};
+  renderAll();
+}
+function afterBridge(next){
+  if(next === "claude"){ if(claudeAuto()) turnClaude(); else openBridge("claude"); }
+  else if(next === "gpt"){ if(gptAuto()) turnGPT(); else openBridge("gpt"); }
+}
+
+/* ---------------- turns ---------------- */
+function order(){
+  if(S.mode === "claude") return ["claude"];
+  if(S.mode === "gpt") return ["gpt"];
+  return ["claude","gpt"];
+}
+
+async function runReplies(){
+  var seq = order();
+  S.busy = true; paintBusy();
+  try{
+    for(var i=0;i<seq.length;i++){
+      var who = seq[i];
+      var auto = who === "claude" ? claudeAuto() : gptAuto();
+      if(!auto){
+        openBridge(who, seq[i+1] || null);
+        return;
+      }
+      if(who === "claude") await turnClaude(); else await turnGPT();
+    }
+  } finally {
+    S.busy = false; paintBusy();
+  }
+}
+
+async function runDebate(topic, rounds, first){
+  S.stop = false;
+  addMsg("me", "토론 주제 — " + topic, {sys:true});
+  var seq = first === "gpt" ? ["gpt","claude"] : ["claude","gpt"];
+  S.busy = true; paintBusy();
+  el.btnDebate.textContent = "중지";
+  try{
+    for(var r=0;r<rounds;r++){
+      for(var i=0;i<seq.length;i++){
+        if(S.stop) return;
+        var ok = seq[i] === "claude" ? await turnClaude() : await turnGPT();
+        if(!ok) return;
+      }
+    }
+  } finally {
+    S.busy = false; S.stop = false;
+    el.btnDebate.textContent = "자동 토론";
+    paintBusy();
+  }
+}
+
+function paintBusy(){
+  el.btnSend.disabled = S.busy;
+  el.input.disabled = S.busy;
+}
+
+/* ---------------- events ---------------- */
+function send(){
+  var t = el.input.value.trim();
+  if(!t || S.busy) return;
+  el.input.value = ""; el.input.style.height = "auto";
+  S.bridge = null;
+  addMsg("me", t);
+  renderAll();
+  runReplies();
+}
+el.btnSend.addEventListener("click", send);
+el.input.addEventListener("keydown", function(e){
+  if(e.key === "Enter" && (e.ctrlKey || e.metaKey)){ e.preventDefault(); send(); }
+});
+el.input.addEventListener("input", function(){
+  this.style.height = "auto";
+  this.style.height = Math.min(this.scrollHeight, 130) + "px";
+});
+
+el.segMode.addEventListener("click", function(e){
+  var b = e.target.closest("button[data-m]"); if(!b) return;
+  S.mode = b.getAttribute("data-m");
+  Array.prototype.forEach.call(el.segMode.children, function(c){
+    c.setAttribute("aria-pressed", c === b ? "true" : "false");
+  });
+  save();
+});
+
+el.btnClear.addEventListener("click", function(){
+  S.msgs = []; S.bridge = null; save(); renderAll();
+});
+
+/* sheets */
+function openSheet(s){ el.veil.classList.add("open"); s.classList.add("open"); }
+function closeSheets(){
+  el.veil.classList.remove("open");
+  [el.sheetSet, el.sheetDeb, el.sheetHelp].forEach(function(s){ s.classList.remove("open"); });
+}
+el.veil.addEventListener("click", closeSheets);
+document.addEventListener("click", function(e){
+  if(e.target.closest("[data-close]")) closeSheets();
+});
+el.btnHelp.addEventListener("click", function(){ openSheet(el.sheetHelp); });
+el.btnSet.addEventListener("click", function(){
+  el.oKey.value = S.oKey; el.oModel.value = S.oModel;
+  el.aKey.value = S.aKey; el.aModel.value = S.aModel;
+  el.pC.value = S.pC; el.pG.value = S.pG;
+  el.oMsg.textContent = "";
+  openSheet(el.sheetSet);
+});
+el.btnSave.addEventListener("click", function(){
+  S.oKey = el.oKey.value.trim();
+  S.oModel = el.oModel.value.trim() || "gpt-5.1";
+  S.aKey = el.aKey.value.trim();
+  S.aModel = el.aModel.value.trim() || "claude-sonnet-5-5";
+  S.pC = el.pC.value.trim(); S.pG = el.pG.value.trim();
+  save(); paintChips(); closeSheets();
+});
+
+["gpt-5.1","gpt-5","gpt-4.1","gpt-4o","gpt-4o-mini"].forEach(function(m){
+  var b = document.createElement("button");
+  b.textContent = m;
+  b.addEventListener("click", function(){ el.oModel.value = m; });
+  el.oPick.appendChild(b);
+});
+
+el.btnModels.addEventListener("click", async function(){
+  var k = el.oKey.value.trim();
+  if(!k){ el.oMsg.textContent = "먼저 API 키를 입력하세요."; el.oMsg.className = "hint w"; return; }
+  el.oMsg.className = "hint"; el.oMsg.textContent = "불러오는 중…";
+  try{
+    var res = await fetch("https://api.openai.com/v1/models", {headers:{Authorization:"Bearer " + k}});
+    if(!res.ok){ throw new Error(apiErr(res.status, await res.text().catch(function(){return "";}))); }
+    var j = await res.json();
+    var ids = (j.data || []).map(function(d){ return d.id; })
+      .filter(function(id){ return /^(gpt|o[0-9]|chatgpt)/.test(id) && !/(audio|realtime|transcribe|tts|image|embed|moderation|search)/.test(id); })
+      .sort();
+    el.oModels.innerHTML = "";
+    ids.forEach(function(id){
+      var o = document.createElement("option"); o.value = id; el.oModels.appendChild(o);
+    });
+    el.oMsg.textContent = ids.length + "개 모델을 불러왔습니다. 모델 칸을 탭하면 목록이 나옵니다.";
+  }catch(e){
+    el.oMsg.className = "hint w";
+    el.oMsg.textContent = msgOf(e);
+  }
+});
+
+el.btnDebate.addEventListener("click", function(){
+  if(S.busy){ S.stop = true; return; }
+  openSheet(el.sheetDeb);
+});
+el.btnDebGo.addEventListener("click", function(){
+  var t = el.dTopic.value.trim();
+  if(!t){ el.dTopic.focus(); return; }
+  if(!(claudeAuto() && gptAuto())){
+    el.dMsg.className = "hint w";
+    el.dMsg.textContent = "양쪽 모두 자동 답변이어야 합니다. 설정에서 키를 넣어주세요.";
+    return;
+  }
+  closeSheets();
+  runDebate(t, parseInt(el.dRounds.value,10) || 2, el.dFirst.value);
+});
+
+SEEDS.forEach(function(s){
+  var b = mk("button","seed", s);
+  b.addEventListener("click", function(){ el.input.value = s; el.input.focus(); });
+  el.seeds.appendChild(b);
+});
+
+/* ---------------- boot ---------------- */
+load();
+Array.prototype.forEach.call(el.segMode.children, function(c){
+  c.setAttribute("aria-pressed", c.getAttribute("data-m") === S.mode ? "true" : "false");
+});
+paintChips();
+renderAll();
+})();
+</script>
+<script>
+if('serviceWorker' in navigator && location.protocol === 'https:'){
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('./sw.js').catch(function(){});
+  });
+}
+</script>
+</body>
+</html>
